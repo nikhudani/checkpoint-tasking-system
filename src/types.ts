@@ -1,7 +1,8 @@
+// src/types.ts
 export interface Task {
-  id: number;           // Internal unique number (1,2,3...)
-  displayId: string;    // Visual ID like "1", "1.1", "1.1.1"
+  id: number;
+  displayId: string;
   name: string;
-  status: 'IN_PROGRESS' | 'DONE';
+  status: 'IN_PROGRESS' | 'DONE' | 'COMPLETE';
   parentId: number | null;
 }

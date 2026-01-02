@@ -1,12 +1,6 @@
+// src/components/TaskList.tsx
 import React, { useState } from 'react';
 import type{ Task } from '../types';
-
-const isComplete = (task: Task, allTasks: Task[]): boolean => {
-  if (task.status !== 'DONE') return false;
-  const children = allTasks.filter((t) => t.parentId === task.id);
-  if (children.length === 0) return true;
-  return children.every((child) => isComplete(child, allTasks));
-};
 
 interface TaskListProps {
   tasks: Task[];
@@ -37,9 +31,20 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
     if (filter === 'ALL') return true;
     if (filter === 'IN_PROGRESS') return task.status === 'IN_PROGRESS';
     if (filter === 'DONE') return task.status === 'DONE';
-    if (filter === 'COMPLETE') return isComplete(task, tasks);
+    if (filter === 'COMPLETE') return task.status === 'COMPLETE';
     return true;
   });
+
+  // Function to check if a task is visible (all ancestors expanded)
+  const isVisible = (task: Task): boolean => {
+    if (task.parentId === null) return true;
+    const parent = tasks.find(t => t.id === task.parentId);
+    if (!parent) return true;
+    if (!expanded.has(parent.id)) return false;
+    return isVisible(parent);
+  };
+
+  const visibleFilteredTasks = filteredTasks.filter(isVisible);
 
   const toggleExpand = (id: number) => {
     const newExpanded = new Set(expanded);
@@ -58,22 +63,29 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
   const getDependencyStats = (task: Task) => {
     const directChildren = tasks.filter(t => t.parentId === task.id);
     const total = directChildren.length;
-    const done = directChildren.filter(c => c.status === 'DONE').length;
-    const complete = directChildren.filter(c => isComplete(c, tasks)).length;
+    const done = directChildren.filter(c => c.status !== 'IN_PROGRESS').length;
+    const complete = directChildren.filter(c => c.status === 'COMPLETE').length;
     return { total, done, complete };
   };
 
   const getDisplayStatus = (task: Task) => {
-    const baseStatus = isComplete(task, tasks) ? 'COMPLETE' : task.status;
+    const baseStatus = task.status;
     const hasDeps = hasChildren(task.id);
 
-    if (!hasDeps) return baseStatus;
+    let color = 'inherit';
+    if (baseStatus === 'COMPLETE') color = 'green';
+    else if (baseStatus === 'DONE') color = '#e67e22'; // orange for DONE
+    else color = '#7f8c8d'; // gray for IN_PROGRESS
+
+    if (!hasDeps) {
+      return <span style={{ fontWeight: 'bold', color }}>{baseStatus}</span>;
+    }
 
     const { total, done, complete } = getDependencyStats(task);
     
     return (
       <div style={{ lineHeight: '1.4' }}>
-        <strong>{baseStatus}</strong>
+        <strong style={{ color }}>{baseStatus}</strong>
         <br />
         <small style={{ color: '#555', fontSize: '12px' }}>
           Dependencies: {done}/{total} done, {complete}/{total} complete
@@ -111,9 +123,8 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
           </tr>
         </thead>
         <tbody>
-          {filteredTasks.map((task) => {
+          {visibleFilteredTasks.map((task) => {
             const level = task.displayId.split('.').length - 1;
-            const isExpanded = expanded.has(task.id);
 
             return (
               <tr key={task.id} style={{ backgroundColor: level % 2 ? '#f9f9f9' : 'white' }}>
@@ -123,7 +134,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
                       style={{ cursor: 'pointer', marginRight: '8px', fontWeight: 'bold', userSelect: 'none' }}
                       onClick={() => toggleExpand(task.id)}
                     >
-                      {isExpanded ? '▼' : '▶'}
+                      {expanded.has(task.id) ? '▼' : '▶'}
                     </span>
                   )}
                   <strong>{task.displayId}</strong>
@@ -142,7 +153,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
                 <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
-                    checked={task.status === 'DONE'}
+                    checked={task.status !== 'IN_PROGRESS'}
                     onChange={() => onToggleStatus(task.id)}
                     style={{ transform: 'scale(1.3)', cursor: 'pointer' }}
                   />
@@ -153,7 +164,7 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
         </tbody>
       </table>
 
-      {filteredTasks.length === 0 && (
+      {visibleFilteredTasks.length === 0 && (
         <p style={{ textAlign: 'center', color: '#666', marginTop: '20px', fontStyle: 'italic' }}>
           No tasks match the selected filter.
         </p>

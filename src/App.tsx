@@ -1,3 +1,4 @@
+// src/App.tsx
 import React, { useState } from 'react';
 import TaskForm from './components/TaskForm';
 import TaskList from './components/TaskList';
@@ -57,7 +58,12 @@ const App: React.FC = () => {
       parentId: targetParentId,
     };
 
-    setTasks([...tasks, newTask]);
+    let updatedTasks = [...tasks, newTask];
+    if (targetParentId !== null) {
+      updatedTasks = downgradeParents(updatedTasks, targetParentId);
+    }
+
+    setTasks(updatedTasks);
     setNextId(nextId + 1);
   };
 
@@ -73,13 +79,68 @@ const App: React.FC = () => {
   };
 
   const handleToggleStatus = (id: number) => {
-    setTasks(
-      tasks.map((task) =>
-        task.id === id
-          ? { ...task, status: task.status === 'IN_PROGRESS' ? 'DONE' : 'IN_PROGRESS' }
-          : task
-      )
-    );
+    setTasks(prevTasks => {
+      const newTasks = [...prevTasks];
+      const index = newTasks.findIndex(t => t.id === id);
+      if (index === -1) return newTasks;
+
+      const task = {...newTasks[index]};
+
+      if (task.status === 'IN_PROGRESS') {
+        // Toggle to DONE, then upgrade if possible
+        task.status = 'DONE';
+        newTasks[index] = task;
+        return upgradeAndPropagate(newTasks, id);
+      } else {
+        // Toggle to IN_PROGRESS, then downgrade parents
+        task.status = 'IN_PROGRESS';
+        newTasks[index] = task;
+        return downgradeParents(newTasks, task.parentId);
+      }
+    });
+  };
+
+  // Upgrade a task from DONE to COMPLETE if all children are COMPLETE, and propagate up
+  const upgradeAndPropagate = (tasksList: Task[], id: number): Task[] => {
+    const newTasks = [...tasksList];
+    const index = newTasks.findIndex(t => t.id === id);
+    if (index === -1) return newTasks;
+
+    const task = newTasks[index];
+    if (task.status !== 'DONE') return newTasks;
+
+    const children = newTasks.filter(t => t.parentId === task.id);
+    const allChildrenComplete = children.length === 0 || children.every(c => c.status === 'COMPLETE');
+
+    if (allChildrenComplete) {
+      task.status = 'COMPLETE';
+      newTasks[index] = task;
+
+      if (task.parentId !== null) {
+        return upgradeAndPropagate(newTasks, task.parentId);
+      }
+    }
+
+    return newTasks;
+  };
+
+  // Downgrade parents from COMPLETE to DONE if applicable, propagate up
+  const downgradeParents = (tasksList: Task[], parentId: number | null): Task[] => {
+    if (parentId === null) return tasksList;
+
+    const newTasks = [...tasksList];
+    const index = newTasks.findIndex(t => t.id === parentId);
+    if (index === -1) return newTasks;
+
+    const parent = newTasks[index];
+    if (parent.status === 'COMPLETE') {
+      parent.status = 'DONE';
+      newTasks[index] = parent;
+
+      return downgradeParents(newTasks, parent.parentId);
+    }
+
+    return newTasks;
   };
 
   return (
