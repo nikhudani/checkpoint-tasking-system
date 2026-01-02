@@ -1,25 +1,19 @@
 import { useContext } from 'react';
 import TaskContext from '../context/TaskContext';
+import TaskItem from './TaskItem';
 
 export default function TaskList() {
   const context = useContext(TaskContext);
   if (!context) return null;
 
-  const { tasks, dispatch } = context;
+  const { tasks } = context;
+
+  const rootTasks = tasks.filter(task => !task.parentId);
 
   return (
     <ul>
-      {tasks.map(task => (
-        <li key={task.id}>
-          <input
-            type="checkbox"
-            checked={task.status === 'DONE'}
-            onChange={() =>
-              dispatch({ type: 'TOGGLE_TASK', id: task.id })
-            }
-          />
-          {task.name} — {task.status}
-        </li>
+      {rootTasks.map(task => (
+        <TaskItem key={task.id} task={task} />
       ))}
     </ul>
   );
