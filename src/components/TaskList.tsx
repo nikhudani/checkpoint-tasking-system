@@ -41,17 +41,25 @@ const TaskList: React.FC<TaskListProps> = ({ tasks, onToggleStatus }) => {
         </select>
       </label>
       <ul>
-        {filteredTasks.map((task) => (
-          <li key={task.id}>
-            ID: {task.id} | Name: {task.name} | Status: {task.status}
-            <input
-              type="checkbox"
-              checked={task.status === 'DONE'}
-              onChange={() => onToggleStatus(task.id)}
-            /> (Check to mark DONE)
-          </li>
-        ))}
-      </ul>
+        {filteredTasks.map((task) => {
+            const parent = tasks.find((t) => t.id === task.parentId);
+            const indent = task.parentId ? '    → ' : ''; // arrow for sub-tasks
+            const parentName = parent ? ` (sub-task of "${parent.name}")` : '';
+            const displayStatus = isComplete(task, tasks) ? 'COMPLETE' : task.status;
+
+            return (
+            <li key={task.id}>
+                {indent}ID: {task.id} | Name: {task.name} | Status: {displayStatus}
+                {parentName}
+                <input
+                type="checkbox"
+                checked={task.status === 'DONE'}
+                onChange={() => onToggleStatus(task.id)}
+                /> (Check to mark DONE)
+            </li>
+            );
+        })}
+        </ul>
     </div>
   );
 };
