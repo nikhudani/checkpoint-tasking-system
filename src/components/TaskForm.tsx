@@ -1,6 +1,7 @@
 import { useContext, useState } from 'react';
 import TaskContext from '../context/TaskContext';
-import type { Task } from '../models/Task';
+import type { Task, TaskStatus } from '../models/Task';
+import { hasCircularDependency } from '../utils/taskUtils';
 
 export default function TaskForm() {
   const context = useContext(TaskContext);
@@ -10,20 +11,25 @@ export default function TaskForm() {
   if (!context) return null;
   const { tasks, dispatch } = context;
 
-  const addTask = () => {
-    if (!name.trim()) return;
+const addTask = () => {
+  if (!name.trim()) return;
 
-    const newTask: Task = {
-      id: crypto.randomUUID(),
-      name,
-      status: 'IN_PROGRESS',
-      parentId: parentId || undefined,
-    };
+  if (hasCircularDependency(tasks, '', parentId)) {
+    alert('Cannot set this parent — circular dependency detected!');
+    return;
+  }
 
-    dispatch({ type: 'ADD_TASK', task: newTask });
-    setName('');
-    setParentId('');
+  const newTask: Task = {
+    id: crypto.randomUUID(),
+    name,
+    status: 'IN_PROGRESS' as TaskStatus,
+    parentId: parentId || undefined,
   };
+
+  dispatch({ type: 'ADD_TASK', task: newTask });
+  setName('');
+  setParentId('');
+};
 
   return (
     <div style={{ marginBottom: '20px' }}>
