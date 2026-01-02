@@ -143,11 +143,121 @@ const App: React.FC = () => {
     return newTasks;
   };
 
+     const handleEditTask = (id: number, updates: { name?: string; parentDisplayId?: string | null }) => {
+    setTasks(prevTasks => {
+      let newTasks = [...prevTasks];
+      const index = newTasks.findIndex(t => t.id === id);
+      if (index === -1) return newTasks;
+
+      const task = { ...newTasks[index] };
+      let parentChanged = false;
+      let oldParentId = task.parentId;
+      let newParentId: number | null = oldParentId;
+
+      // Update name if provided
+      if (updates.name !== undefined) {
+        task.name = updates.name.trim() || task.name;
+      }
+
+      // Only process parent change if explicitly provided and different
+      if (updates.parentDisplayId !== undefined) {
+        const newParentStr = updates.parentDisplayId === null ? null : updates.parentDisplayId.trim();
+
+        if (newParentStr === null) {
+          if (task.parentId !== null) parentChanged = true;
+          newParentId = null;
+        } else {
+          const parentTask = newTasks.find(t => t.displayId === newParentStr);
+          if (!parentTask) {
+            alert(`Parent Task ID "${newParentStr}" does not exist!`);
+            return prevTasks;
+          }
+          if (parentTask.id === task.id) {
+            alert("A task cannot be its own parent!");
+            return prevTasks;
+          }
+          // Basic cycle prevention
+          if (isDescendant(parentTask.id, task.id, newTasks)) {
+            alert("Cannot create circular dependency!");
+            return prevTasks;
+          }
+          if (task.parentId !== parentTask.id) parentChanged = true;
+          newParentId = parentTask.id;
+        }
+        task.parentId = newParentId;
+      }
+
+      newTasks[index] = task;
+
+      // ONLY update displayIds if parent actually changed
+      if (parentChanged) {
+        // Update this task's displayId
+        const newDisplayId = newParentId === null 
+          ? generateTopLevelDisplayId(newTasks) 
+          : `${newTasks.find(t => t.id === newParentId)!.displayId}.${getNextChildNumber(newTasks, newParentId)}`;
+        task.displayId = newDisplayId;
+        newTasks[index] = task;
+
+        // Recursively update all descendants
+        updateDescendantDisplayIds(newTasks, task.id, newDisplayId);
+      }
+
+      // Trigger status propagation only if parent changed
+      if (parentChanged) {
+        if (oldParentId !== null) {
+          newTasks = downgradeParents(newTasks, oldParentId);
+        }
+        if (newParentId !== null) {
+          newTasks = downgradeParents(newTasks, newParentId);
+        }
+        newTasks = upgradeAndPropagate(newTasks, id);
+      }
+
+      return newTasks;
+    });
+  };
+
+  // Helper: Check if target is descendant of task (for cycle prevention)
+  const isDescendant = (potentialAncestorId: number, taskId: number, tasksList: Task[]): boolean => {
+    const children = tasksList.filter(t => t.parentId === potentialAncestorId);
+    return children.some(child => 
+      child.id === taskId || isDescendant(child.id, taskId, tasksList)
+    );
+  };
+
+  // Helper: Generate next top-level ID (e.g., 1,2,3...)
+  const generateTopLevelDisplayId = (tasksList: Task[]): string => {
+    const topLevel = tasksList.filter(t => t.parentId === null);
+    const max = topLevel.reduce((max, t) => Math.max(max, parseInt(t.displayId) || 0), 0);
+    return (max + 1).toString();
+  };
+
+  // Helper: Get next child number for a parent
+  const getNextChildNumber = (tasksList: Task[], parentId: number): number => {
+    const siblings = tasksList.filter(t => t.parentId === parentId);
+    return siblings.length + 1; // since we're adding a new one (moved)
+  };
+
+  // Helper: Recursively update descendants' displayIds
+  const updateDescendantDisplayIds = (tasksList: Task[], parentId: number, newParentDisplayId: string) => {
+    const children = tasksList.filter(t => t.parentId === parentId);
+    children.forEach((child, idx) => {
+      const childIndex = tasksList.findIndex(t => t.id === child.id);
+      const childDisplayId = `${newParentDisplayId}.${idx + 1}`;
+      tasksList[childIndex].displayId = childDisplayId;
+      updateDescendantDisplayIds(tasksList, child.id, childDisplayId);
+    });
+  };
+
   return (
     <div className="App">
       <h1>CheckPointSpot Tasking System</h1>
       <TaskForm onCreate={handleCreate} allTasks={tasks} />
-      <TaskList tasks={tasks} onToggleStatus={handleToggleStatus} />
+      <TaskList 
+  tasks={tasks} 
+  onToggleStatus={handleToggleStatus}
+  onEditTask={handleEditTask}
+/>
     </div>
   );
 };
